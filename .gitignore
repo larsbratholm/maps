@@ -102,3 +102,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# datafile
+maps-synthetic-data-v1.1.csv
