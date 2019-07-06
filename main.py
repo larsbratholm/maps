@@ -224,40 +224,53 @@ def specify_model(data):
     computer_use_observables = mask_high_computer_use.values[:,None]
 
     # Keep only data points that we chose not to ignore
-    mask = (~data.n_ignore).values
+    mask = (~data.n_ignore).values[:,None]
 
+    depression_observables = np.asarray([0,0,1]*1000)[:,None]
+    computer_use_observables = np.asarray([0,1,0]*1000)[:,None]
+    mask = np.asarray([True]*3000)[:,None]
 
     # Hidden nodes
-    n_hidden_nodes = 1
+    n_hidden_nodes = 2
     # Data size
-    n_samples = data.shape[0]
+    n_samples = 3000#data.shape[0]
     # Probability for specific hidden nodes (plates = (n_hidden_nodes,)
     # This correspond to the weight prefactor of the independent mixture model
-    # 1/2 is Jeffreys prior
-    p_hidden_node = bayespy.nodes.Dirichlet([1/2 for n in range(n_hidden_nodes)])
+    p_hidden_node = bayespy.nodes.Dirichlet([100 for n in range(n_hidden_nodes)])
     # Observable for which mixture a sample belong to. Hidden. (plates = (n_samples, 1))
     obs_hidden_node = bayespy.nodes.Categorical(p_hidden_node, plates=(n_samples, 1))
 
-    print(obs_hidden_node.get_values())
-    quit()
     # Probability of depression in each node (plates = (1, n_hidden_nodes)
-    p_depression = bayespy.nodes.Beta([1/2,1/2], plates=(1,n_hidden_nodes))
+    p_depression = bayespy.nodes.Beta([1,1], plates=(1,n_hidden_nodes))
     obs_depression = bayespy.nodes.Mixture(obs_hidden_node, bayespy.nodes.Bernoulli, p_depression)
     # Probability of high computer use in each node (plates = (1, n_hidden_nodes)
-    p_computer_use = bayespy.nodes.Beta([1/2,1/2], plates=(1,n_hidden_nodes))
+    p_computer_use = bayespy.nodes.Beta([1,1], plates=(1,n_hidden_nodes))
     obs_computer_use = bayespy.nodes.Mixture(obs_hidden_node, bayespy.nodes.Bernoulli, p_computer_use)
     # Construct model
     model = bayespy.inference.VB(obs_hidden_node, p_hidden_node, obs_depression, p_depression, obs_computer_use, p_computer_use)
-    # Break symmetry
+    # Break symmetry by initializing from random
     p_depression.initialize_from_random()
     p_computer_use.initialize_from_random()
     # Observe data
-    obs_depression.observe(depression_observables[:,None], mask=mask[:,None])
-    obs_computer_use.observe(computer_use_observables[:,None], mask=mask[:,None])
-    model.update(repeat=1000, verbose=True, tol=1e-6)
-    print(p_depression)
-    print(p_computer_use)
-    print(p_hidden_node)
+    obs_depression.observe(depression_observables, mask=mask)
+    obs_computer_use.observe(computer_use_observables, mask=mask)
+    # Fit model
+    model.update(repeat=10000, verbose=True, tol=1e-7)
+    #print(p_depression)
+    #print(p_computer_use)
+    #print(p_hidden_node)
+    #print(p_computer_use.get_parameters())
+    print(obs_computer_use.integrated_logpdf_from_parents([0,1],0)[0:3])
+    obs_computer_use.unobserve()
+    obs_depression.unobserve()
+    obs_depression.observe(np.zeros((n_samples,1), dtype=int))
+    model2 = bayespy.inference.VB(obs_hidden_node, obs_depression)
+    model2.update(repeat=1000, verbose=True, tol=1e-7)
+    print(obs_computer_use.integrated_logpdf_from_parents([0,1],0)[0:3])
+    #obs_depression.unobserve()
+    #computer_use.unobserve()
+    #p_computer_use.observe([1,1,1])
+
     quit()
 
 
