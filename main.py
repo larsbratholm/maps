@@ -237,6 +237,9 @@ def specify_model(data):
     p_hidden_node = bayespy.nodes.Dirichlet([1/2 for n in range(n_hidden_nodes)])
     # Observable for which mixture a sample belong to. Hidden. (plates = (n_samples, 1))
     obs_hidden_node = bayespy.nodes.Categorical(p_hidden_node, plates=(n_samples, 1))
+
+    print(obs_hidden_node.get_values())
+    quit()
     # Probability of depression in each node (plates = (1, n_hidden_nodes)
     p_depression = bayespy.nodes.Beta([1/2,1/2], plates=(1,n_hidden_nodes))
     obs_depression = bayespy.nodes.Mixture(obs_hidden_node, bayespy.nodes.Bernoulli, p_depression)
