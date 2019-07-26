@@ -180,38 +180,14 @@ def specify_model(data):
     """
     import numpy as np
     import bayespy
-    import pomegranate
 
-    x = np.asarray([[0,0,1]*10000, [0,1,0]*10000]).T
-    x = np.random.randint(0,4,size=1000)
-
-    dist0 = pomegranate.DiscreteDistribution({0:1, 1:0, 2:0, 3:0})
-    dist1 = pomegranate.DiscreteDistribution({0:0, 1:1, 2:0, 3:0})
-    dist2 = pomegranate.DiscreteDistribution({0:0, 1:0, 2:1, 3:0})
-    dist3 = pomegranate.DiscreteDistribution({0:0, 1:0, 2:0, 3:1})
-    dist23 = pomegranate.GeneralMixtureModel([dist2, dist3], weights = [0.4,0.6])
-    dist123 = pomegranate.GeneralMixtureModel([dist23, dist1], weights = [0.4,0.6])
-    model = pomegranate.GeneralMixtureModel([dist123, dist0], weights = [0.4,0.6])
-    model.fit(x)
-    quit()
-
-    i1 = pomegranate.IndependentComponentsDistribution([pomegranate.BernoulliDistribution(np.random.random()), pomegranate.BernoulliDistribution(np.random.random())])
-    i2 = pomegranate.IndependentComponentsDistribution([pomegranate.BernoulliDistribution(np.random.random()), pomegranate.BernoulliDistribution(np.random.random())])
-    model = pomegranate.GeneralMixtureModel([1,i2], weights = [0.4,0.6])
-    model.fit(x)
-    print(model)
-
-
-
-    quit()
+    #x = np.asarray([[0,0,1]*10000, [0,1,0]*10000]).T
+    #x = np.random.randint(0,4,size=1000)
 
     # Hidden nodes in mixture model
-    n_hidden_nodes = 1
+    n_hidden_nodes = 4
     # Number of clusters for computer use
-    n_computer_use_clusters = 2
-
-
-
+    n_computer_use_clusters = 4
 
     # Assertions on user values
     assert n_hidden_nodes >= 1
@@ -219,9 +195,9 @@ def specify_model(data):
     assert n_computer_use_clusters >= 2
     assert isinstance(n_computer_use_clusters, int)
 
+
     # Data size
     n_samples = data.shape[0]
-
 
     # Dictionary to keep all the bayespy.nodes objects, since we're going to have many of them
     nodes = {}
@@ -231,144 +207,66 @@ def specify_model(data):
     nodes["p_computer_use_classification"] = bayespy.nodes.Dirichlet([0.5 for n in range(n_computer_use_clusters)])
     # Observable for which cluster a sample belong to. Hidden. (plates = (n_samples, 1))
     nodes["obs_computer_use_classification"] = bayespy.nodes.Categorical(nodes["p_computer_use_classification"], plates=(n_samples, 1))
-    # comp_week is an ordinal variable, so need to first model if X = 0 is observed, or X > 0.
-    # Then if X>0, we need to check if X = 1 or X > 1. This requires the same number of parameters as modelling them as independent
-    # categories, but captures some of the neighbouring effects between the categories.
-    nodes["p_comp_week_0"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    nodes["p_comp_week_1"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    nodes["p_comp_week_2"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    # Observables of comp_week
-    nodes["obs_comp_week_0"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_0"])
-    nodes["obs_comp_week_1"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_1"])
-    nodes["obs_comp_week_2"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_2"])
-    # Same procedure for comp_wend
-    nodes["p_comp_wend_0"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    nodes["p_comp_wend_1"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    nodes["p_comp_wend_2"] = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_computer_use_clusters))
-    nodes["p_comp_wend_0"] * nodes["p_comp_wend_1"]
-    quit()
-    # Observables of comp_wend
-    nodes["obs_comp_week_0"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_0"])
-    nodes["obs_comp_week_1"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_1"])
-    nodes["obs_comp_week_2"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Bernoulli, nodes["p_comp_week_2"])
-    # Initialize the nodes such that node0 will be low computer use and node1 will be high computer use
-    # and any other node will be intemediate values
+    # Treat comp_week as an ordinal variable.
+    nodes["p_comp_week"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,))
+    nodes["z_comp_week"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Categorical, nodes["p_comp_week"], plates=(n_samples, 1))
+    nodes["p0_comp_week"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,2))
+    nodes["z0_comp_week"] = bayespy.nodes.MultiMixture([nodes["obs_computer_use_classification"], nodes["z_comp_week"]], bayespy.nodes.Categorical, nodes["p0_comp_week"], plates=(n_samples,1))
+    nodes["p1_comp_week"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,2))
+    nodes["z1_comp_week"] = bayespy.nodes.MultiMixture([nodes["obs_computer_use_classification"], nodes["z_comp_week"]], bayespy.nodes.Categorical, nodes["p1_comp_week"], plates=(n_samples,1))
+    # Treat comp_wend as an ordinal variable.
+    nodes["p_comp_wend"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,))
+    nodes["z_comp_wend"] = bayespy.nodes.Mixture(nodes["obs_computer_use_classification"], bayespy.nodes.Categorical, nodes["p_comp_wend"], plates=(n_samples, 1))
+    nodes["p0_comp_wend"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,2))
+    nodes["z0_comp_wend"] = bayespy.nodes.MultiMixture([nodes["obs_computer_use_classification"], nodes["z_comp_wend"]], bayespy.nodes.Categorical, nodes["p0_comp_wend"], plates=(n_samples,1))
+    nodes["p1_comp_wend"] = bayespy.nodes.Beta([1e-6,1e-6], plates=(n_computer_use_clusters,2))
+    nodes["z1_comp_wend"] = bayespy.nodes.MultiMixture([nodes["obs_computer_use_classification"], nodes["z_comp_wend"]], bayespy.nodes.Categorical, nodes["p1_comp_wend"], plates=(n_samples,1))
+
     nodes["p_computer_use_classification"].initialize_from_random()
-    quit()
-    #nodes["p_comp_week_0"].initialize_from_value([0.99 - 0.01 * (n_computer_use_clusters - 2)]
-    #                                               + [0.01 for n in range(n_computer_use_clusters - 1)])
-    #nodes["p_comp_week_1"].initialize_from_random()
-    #nodes["p_comp_week_2"].initialize_from_random()
 
 
-    # Create some masks of the data
-    mask_depression = (data.depression == True)
-    mask_high_computer_use = (data.comp_use == 'high')
-    depression_observables = mask_depression.values[:,None]
-    computer_use_observables = mask_high_computer_use.values[:,None]
+    model = bayespy.inference.VB(nodes["z0_comp_week"], nodes["p0_comp_week"], nodes["z1_comp_week"], nodes["p1_comp_week"], nodes["z_comp_week"], nodes["p_comp_week"],
+                        nodes["z0_comp_wend"], nodes["p0_comp_wend"], nodes["z1_comp_wend"], nodes["p1_comp_wend"], nodes["z_comp_wend"], nodes["p_comp_wend"],
+            nodes["obs_computer_use_classification"], nodes["p_computer_use_classification"])
 
-    # Keep only data points that we chose not to ignore
-    mask = (~data.n_ignore).values[:,None]
+    # Observe z_comp_week values (if comp_week >= 2)
+    z_comp_week = np.zeros((n_samples, 1), dtype=int)
+    z_comp_week[data["comp_week"].values.astype(int) == 2] = 1
+    z_comp_week[data["comp_week"].values.astype(int) == 3] = 1
+    z_comp_week_mask = ~data["comp_week"].isnull()[:,None]
+    nodes["z_comp_week"].observe(z_comp_week, mask=z_comp_week_mask)
+    # Observe z0_comp_week values (if comp_week is 0 or 1)
+    z0_comp_week = np.zeros((n_samples, 1), dtype=int)
+    z0_comp_week[data["comp_week"].values.astype(int) == 1] = 1
+    nodes["z0_comp_week"].observe(z0_comp_week, mask=z_comp_week_mask)
+    # Observe z1_comp_week values (if comp_week is 2 or 3)
+    z1_comp_week = np.zeros((n_samples, 1), dtype=int)
+    z1_comp_week[data["comp_week"].values.astype(int) == 3] = 1
+    nodes["z1_comp_week"].observe(z1_comp_week, mask=z_comp_week_mask)
 
-    # For testing
-    #depression_observables = np.asarray([0,0,1]*1000)[:,None]
-    #computer_use_observables = np.asarray([0,1,0]*1000)[:,None]
-    #mask = np.asarray([True]*3000)[:,None]
+    # Observe z_comp_wend values (if comp_wend >= 2)
+    z_comp_wend = np.zeros((n_samples, 1), dtype=int)
+    z_comp_wend[data["comp_wend"].values.astype(int) == 2] = 1
+    z_comp_wend[data["comp_wend"].values.astype(int) == 3] = 1
+    z_comp_wend_mask = ~data["comp_wend"].isnull()[:,None]
+    nodes["z_comp_wend"].observe(z_comp_wend, mask=z_comp_wend_mask)
+    # Observe z0_comp_wend values (if comp_wend is 0 or 1)
+    z0_comp_wend = np.zeros((n_samples, 1), dtype=int)
+    z0_comp_wend[data["comp_wend"].values.astype(int) == 1] = 1
+    nodes["z0_comp_wend"].observe(z0_comp_wend, mask=z_comp_wend_mask)
+    # Observe z1_comp_wend values (if comp_wend is 2 or 3)
+    z1_comp_wend = np.zeros((n_samples, 1), dtype=int)
+    z1_comp_wend[data["comp_wend"].values.astype(int) == 3] = 1
+    nodes["z1_comp_wend"].observe(z1_comp_wend, mask=z_comp_wend_mask)
 
-    # Probability for specific hidden nodes (plates = (n_hidden_nodes,)
-    # This correspond to the weight prefactor of the independent mixture model
-    p_hidden_node = bayespy.nodes.Dirichlet([0.5 for n in range(n_hidden_nodes)])
-    # Observable for which mixture a sample belong to. Hidden. (plates = (n_samples, 1))
-    obs_hidden_node = bayespy.nodes.Categorical(p_hidden_node, plates=(n_samples, 1))
+    # Prime the clusters with the extreme values to make convergence faster
+    obs_computer_use_classification = np.zeros((n_samples, 1), dtype=int)
+    obs_computer_use_classification[(z1_comp_wend) & (z1_comp_week)] = 1
+    obs_computer_use_mask = ((z_comp_wend_mask[:,0] & z_comp_week_mask[:,0]) & (((z1_comp_wend[:,0]) & (z1_comp_week[:,0])) | ((data["comp_week"].values.astype(int) == 0) & (data["comp_wend"].values.astype(int) == 0))))[:,None].astype(bool)
+    nodes["obs_computer_use_classification"].observe(obs_computer_use_classification, mask=obs_computer_use_mask)
 
-    # Probability of depression in each node (plates = (1, n_hidden_nodes)
-    p_depression = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_hidden_nodes))
-    obs_depression = bayespy.nodes.Mixture(obs_hidden_node, bayespy.nodes.Bernoulli, p_depression)
-    # Probability of high computer use in each node (plates = (1, n_hidden_nodes)
-    p_computer_use = bayespy.nodes.Beta([0.5,0.5], plates=(1,n_hidden_nodes))
-    obs_computer_use = bayespy.nodes.Mixture(obs_hidden_node, bayespy.nodes.Bernoulli, p_computer_use)
-    # Construct model
-    model = bayespy.inference.VB(obs_hidden_node, p_hidden_node, obs_depression, p_depression, obs_computer_use, p_computer_use)
-    # Break symmetry by initializing from random
-    p_depression.initialize_from_random()
-    p_computer_use.initialize_from_random()
-    p_hidden_node.initialize_from_random()
-    # Observe data
-    obs_depression.observe(depression_observables, mask=mask)
-    obs_computer_use.observe(computer_use_observables, mask=mask)
     # Fit model
-    model.update(repeat=10000, verbose=True, tol=1e-6)
-    #model.optimize(obs_depression, p_depression, obs_computer_use, p_computer_use, maxiter=10000, tol=1e-6, verbose=True, collapsed=[obs_hidden_node, p_hidden_node])
-    print(p_depression)
-    print(p_computer_use)
-    print(p_hidden_node)
-    #print(p_computer_use.get_parameters())
-    #print(obs_computer_use.integrated_logpdf_from_parents([0,1],0)[0:3])
-    #obs_computer_use.unobserve()
-    #obs_depression.unobserve()
-    #obs_depression.observe(np.zeros((n_samples,1), dtype=int))
-    #model2 = bayespy.inference.VB(obs_hidden_node, obs_depression)
-    #model2.update(repeat=1000, verbose=True, tol=1e-7)
-    #print(obs_computer_use.integrated_logpdf_from_parents([0,1],0)[0:3])
-    #obs_depression.unobserve()
-    #computer_use.unobserve()
-    #p_computer_use.observe([1,1,1])
-
-    quit()
-
-
-    # Get the probabilities of having depression given high computer use (p_YH),
-    # depression given low computer use (p_YL), no depression given high computer use
-    # (p_NH) and no depression given low computer use (p_NL)
-    p_YH = count_comp_high_dep_yes / (count_comp_high_dep_no + count_comp_high_dep_yes)
-    p_NH = count_comp_high_dep_no / (count_comp_high_dep_no + count_comp_high_dep_yes)
-    p_YL = count_comp_low_dep_yes / (count_comp_low_dep_no + count_comp_low_dep_yes)
-    p_NL = count_comp_low_dep_no / (count_comp_low_dep_no + count_comp_low_dep_yes)
-
-    # Assertion that the probabilities add up
-    assert abs(p_YH + p_NH - 1) < 1e-6
-    assert abs(p_YL + p_NL - 1) < 1e-6
-
-    # Log-odds-ratio
-    L = np.log(p_YH) - np.log(p_NH) - np.log(p_YL) + np.log(p_NL)
-    # Variance
-    se = np.sqrt(1/count_comp_low_dep_no + 1/count_comp_low_dep_yes + 1/count_comp_high_dep_no + 1/count_comp_high_dep_yes)
-    # Odds-ratio (odds of depression given high computer use over odds of depression given low computer use)
-    OR = np.exp(L)
-    # Confidence interval
-    ci = (np.exp(L-1.96*se), np.exp(L+1.96*se))
-    # 2-sided p-value
-    p_value = ss.norm.sf(abs(L/se))*2
-
-    # Just calculate the maximum likelihood for the remaining data, with a model
-    # placing each point in 4 categories as above. I don't really have any hidden variables
-    # so I don't think an information criterion makes sense on it's own
-    log_likelihood = count_comp_low_dep_no * np.log(p_NL) \
-                   + count_comp_low_dep_yes * np.log(p_YL) \
-                   + count_comp_high_dep_no * np.log(p_NH) \
-                   + count_comp_high_dep_yes * np.log(p_YH)
-
-    # 4 categories, so 3 variables
-    aic = 2 * 3 - 2 * log_likelihood
-
-    # Make dictionary for results
-    results = {}
-    # There is no model object
-    #results['mod'] = None
-    # odds ratio
-    results['or_1'] = OR
-    # confidence interval as a tuple
-    results['ci_1'] = ci
-    # 2-sided p-value
-    results['p_1'] = p_value
-    # I assume that multiple odds ratio are optional?
-    #results['or_2'] = None
-    #results['ci_2'] = None
-    #results['p_2'] = None
-    # AIC
-    results['AIC'] = aic
-
-    return data, results
+    model.update(repeat=10000, verbose=True, tol=1e-7)
 
 
 if __name__ == "__main__":
